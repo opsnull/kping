@@ -2,9 +2,9 @@
 
 kping is a large scale & high performance ICMP library.
 
-It can send up to 1024 icmp packets in one system call and receive packets quickly.
+It can send up to 1024 icmp packets in one system call and receive packets quickly(using af_packet).
 
-Workping in progress.
+**Working in progress.**
 
 ## license
 
