@@ -7,14 +7,14 @@ import (
 )
 
 // process icmp packets
-func (p *Pinger) process() {
+func (p *kping) process() {
 	stime := time.Now()
 	for event := range p.ipEventChan {
 		_, ok := p.stats[event.ip]
 		if !ok {
 			p.stats[event.ip] = &Statistic{
-				ipEvents: make(map[int]ipEvent, p.Count),
-				RTTs:     make([]float64, 0, p.Count*2),
+				ipEvents: make(map[int]ipEvent, p.count),
+				RTTs:     make([]float64, 0, p.count*2),
 			}
 		}
 

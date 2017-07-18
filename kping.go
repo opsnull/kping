@@ -55,18 +55,20 @@ var DefaultSendOptions = SendOptions{
 
 // AfPacketRecvOptions af_packet recv options
 type AfPacketRecvOptions struct {
-	Parallel int64         // recv goroutine number
-	BlockMB  int64         // af_packet: total block size
-	Timeout  time.Duration // recv timeout
-	Iface    string        // recv interface name, eg: "eth0"
+	Parallel   int64         // recv goroutine number
+	BlockMB    int64         // af_packet: total block size
+	Timeout    time.Duration // recv timeout
+	Iface      string        // recv interface name, eg: "eth0"
+	SnapLength int64         // snap byte number
 }
 
 // DefaultAfPacketRecvOptions default af_packet recv options
 var DefaultAfPacketRecvOptions = AfPacketRecvOptions{
-	Parallel: 1,
-	BlockMB:  128,
-	Timeout:  100 * time.Millisecond,
-	Iface:    "eth0",
+	Parallel:   1,
+	BlockMB:    128,
+	Timeout:    100 * time.Millisecond,
+	Iface:      "eth0",
+	SnapLength: 128,
 }
 
 // BatchRecvOptions batch recv options
@@ -75,7 +77,6 @@ type BatchRecvOptions struct {
 	BufferSize int64         // batch recv buffer size
 	Parallel   int64         // recv goroutine number
 	Timeout    time.Duration // recv timeout
-	SnapLength int64         // snap byte number
 }
 
 // DefaultBatchRecvOptions default batch recv options
@@ -84,7 +85,6 @@ var DefaultBatchRecvOptions = BatchRecvOptions{
 	BufferSize: 10 * 1024 * 1024,
 	Parallel:   10,
 	Timeout:    100 * time.Millisecond,
-	SnapLength: 128,
 }
 
 // PFRingRecvOptions pf_ring recv options
@@ -123,21 +123,21 @@ type Pinger interface {
 }
 
 // NewPinger return a new pinger
-func NewPinger(sourceIP string, cout, size int64, timeout, interval time.Duration) (p *Pinger, err error) {
+func NewPinger(sourceIP string, count, size int64, timeout, interval time.Duration) (p Pinger, err error) {
 	p = &kping{
-		sourceIP:        sourceIP,
-		count:           count,
-		size:            size,
-		timeout:         timeout,
-		interval:        interval,
-		recvMode:        DefaultRecvMode,
-		sendOpts:        DefaultSendOptions,
-		afpacktRecvOpts: DefaultAfPacketRecvOptions,
-		batchRecvOpts:   DefaultBatchRecvOptions,
-		pfringRecvOpts:  DefaultPFRingRecvOptions,
-		recvReady:       make(chan bool),
-		sendDone:        make(chan bool),
-		sendLock:        new(sync.Mutex),
+		sourceIP:         sourceIP,
+		count:            count,
+		size:             size,
+		timeout:          timeout,
+		interval:         interval,
+		recvMode:         DefaultRecvMode,
+		sendOpts:         DefaultSendOptions,
+		afpacketRecvOpts: DefaultAfPacketRecvOptions,
+		batchRecvOpts:    DefaultBatchRecvOptions,
+		pfringRecvOpts:   DefaultPFRingRecvOptions,
+		recvReady:        make(chan bool),
+		sendDone:         make(chan bool),
+		sendLock:         new(sync.Mutex),
 	}
 	return p, nil
 }
@@ -150,13 +150,13 @@ type kping struct {
 	interval time.Duration // ping interval
 	recvMode string
 
-	sendOpts        SendOptions
-	afpacktRecvOpts AfPacketRecvOptions
-	batchRecvOpts   BatchRecvOptions
-	pfringRecvOpts  PFRingRecvOptions
+	sendOpts         SendOptions
+	afpacketRecvOpts AfPacketRecvOptions
+	batchRecvOpts    BatchRecvOptions
+	pfringRecvOpts   PFRingRecvOptions
 
 	rawConn      *rawConn
-	ring         *pfing.Ring
+	ring         *pfring.Ring
 	packetSource *gopacket.PacketSource
 	stats        map[string]*Statistic // key: ip
 	addrs        []*net.IPAddr
@@ -174,13 +174,13 @@ func (p *kping) SetRecvMode(mode string) (err error) {
 	case "afpacket", "pfring", "batch":
 		p.recvMode = mode
 	default:
-		return fmt.Error("unkown recv mode: %s, supported: afpacket pfring batch")
+		return fmt.Errorf("unkown recv mode: %s, supported: afpacket pfring batch")
 	}
 	return nil
 }
 
 func (p *kping) SetAfPacketRecvOptions(options AfPacketRecvOptions) error {
-	p.afpacktRecvOpts = options
+	p.afpacketRecvOpts = options
 	return nil
 }
 
@@ -201,7 +201,7 @@ func (p *kping) SetSendOptions(options SendOptions) error {
 
 func (p *kping) AddIPs(ipaddrs []string) error {
 	p.addrs = make([]*net.IPAddr, 0, len(ipaddrs))
-	p.Stats = make(map[string]*Statistic, len(ipaddrs))
+	p.stats = make(map[string]*Statistic, len(ipaddrs))
 	for _, ipaddr := range ipaddrs {
 		addr, err := net.ResolveIPAddr("ip4", ipaddr)
 		if err != nil {
@@ -220,21 +220,21 @@ type addrBatch struct {
 
 func (p *kping) Run() (statistics map[string]*Statistic, err error) {
 	// used by send & recv, so buffer size is double
-	p.ipEventChan = make(chan *ipEvent, p.ipCount*p.Count*2)
+	p.ipEventChan = make(chan *ipEvent, p.ipCount*p.count*2)
 
 	// set context
-	ctx, cancel := context.WithTimeout(context.TODO(), p.Timeout)
+	ctx, cancel := context.WithTimeout(context.TODO(), p.timeout)
 	p.context = ctx
 	p.cancel = cancel
 
 	// create raw socket connection
-	rawConn, err := newRawConn(p.sourceIP, p.batchRecv.BufferSize, p.sendOpts.BufferSize, p.batchRecv.Timeout, p.sendOpts.Timeout)
+	rawConn, err := newRawConn(p.sourceIP, p.batchRecvOpts.BufferSize, p.sendOpts.BufferSize, p.batchRecvOpts.Timeout, p.sendOpts.Timeout)
 	if err != nil {
 		return nil, err
 	}
 	defer rawConn.close()
 
-	if p.PingMode == "batch" {
+	if p.recvMode == "batch" {
 		// filter ICMP Echo & Reply type packet
 		filter := ipv4.ICMPFilter{}
 		filter.SetAll(false)
@@ -242,12 +242,12 @@ func (p *kping) Run() (statistics map[string]*Statistic, err error) {
 		if err := rawConn.setICMPFilter(&filter); err != nil {
 			return nil, fmt.Errorf("setICMPFilter failed: %v", err)
 		}
-	} else if mode == "pfring" {
-		ring, err := pfring.NewRing(p.Iface, p.pfringRecvOpts.SnapLength, 0)
+	} else if p.recvMode == "pfring" {
+		ring, err := pfring.NewRing(p.pfringRecvOpts.Iface, uint32(p.pfringRecvOpts.SnapLength), 0)
 		if err != nil {
 			return nil, fmt.Errorf("pfring: NewRing failed: %v", err)
 		}
-		filter := fmt.Sprintf("ip and dst %s and icmp[icmptype] = icmp-echoreply and icmp[4:2] > %d and icmp[6:2] > %d", p.SourceIP, icmpIDSeqInitNum, icmpIDSeqInitNum)
+		filter := fmt.Sprintf("ip and dst %s and icmp[icmptype] = icmp-echoreply and icmp[4:2] > %d and icmp[6:2] > %d", p.sourceIP, icmpIDSeqInitNum, icmpIDSeqInitNum)
 		if err := ring.SetBPFFilter(filter); err != nil {
 			return nil, fmt.Errorf("pfring: set bpf filter failed: %v, filter: %s", err, filter)
 		}
@@ -272,29 +272,37 @@ func (p *kping) Run() (statistics map[string]*Statistic, err error) {
 	go func() {
 		defer close(p.ipEventChan)
 
-		fmt.Fprintf(os.Stderr, "kping recv: started, parallel: %d, ipCount: %d\n", p.ReadParallel, p.ipCount)
+		fmt.Fprintf(os.Stderr, "kping recv: started, ipCount: %d\n", p.ipCount)
 		wg := new(sync.WaitGroup)
 		stime := time.Now()
-		for i := 0; i < int(p.ReadParallel); i++ {
+
+		var recvParallel int64
+		var recvFunc func(index int, wg *sync.WaitGroup)
+		switch p.recvMode {
+		case "afpacket":
+			recvParallel = p.afpacketRecvOpts.Parallel
+			recvFunc = p.afpacketRecv
+		case "pfring":
+			recvParallel = p.pfringRecvOpts.Parallel
+			recvFunc = p.pfringRecv
+		case "batch":
+			recvParallel = p.batchRecvOpts.Parallel
+			recvFunc = p.batchRecv
+		default:
+			panic(fmt.Sprintf("ping recv: unknown recvMode: %s", p.recvMode))
+
+		}
+		for i := 0; i < int(recvParallel); i++ {
 			wg.Add(1)
 			index := i
-			switch p.PingMode {
-			case "afpacket":
-				go p.afpacketRecv(index, wg) // when sent done, goroutine return
-			case "pfring":
-				go p.pfringRecv(index, wg)
-			case "batch":
-				go p.batchRecv(index, wg)
-			default:
-				panic(ftm.Sprintf("ping recv: unknown pingMode: %s", p.PingMode))
-			}
+			go recvFunc(index, wg)
 		}
 
 		// receive ready
 		close(p.recvReady)
 
 		wg.Wait()
-		fmt.Fprintf(os.Stderr, "kping recv: all done, parallel: %d, ipCount: %d, usedTime: %s\n", p.ReadParallel, p.ipCount, time.Since(stime))
+		fmt.Fprintf(os.Stderr, "kping recv: all done, ipCount: %d, usedTime: %s\n", p.ipCount, time.Since(stime))
 	}()
 
 	// send packets
@@ -307,50 +315,50 @@ func (p *kping) Run() (statistics map[string]*Statistic, err error) {
 
 		stime := time.Now()
 		addrBatchChan := make(chan addrBatch)
-		fmt.Fprintf(os.Stderr, "kping send: started, parallel: %d, ipCount: %d, \n", p.WriteParallel, p.ipCount)
+		fmt.Fprintf(os.Stderr, "kping send: started, ipCount: %d, \n", p.ipCount)
 
 		// cocurenccy send packets
-		for i := 0; i < int(p.WriteParallel); i++ {
+		for i := 0; i < int(p.sendOpts.Parallel); i++ {
 			index := i
 			go p.send(index, addrBatchChan) // after close addrBatchChan, goroutine return
 		}
 
 		// caculate batch number
 		var batchNum = 0
-		if p.ipCount%p.WriteBatch == 0 {
-			batchNum = int(p.ipCount / p.WriteBatch)
+		if p.ipCount%p.sendOpts.BatchSize == 0 {
+			batchNum = int(p.ipCount / p.sendOpts.BatchSize)
 		} else {
-			batchNum = int(p.ipCount/p.WriteBatch + 1)
+			batchNum = int(p.ipCount/p.sendOpts.BatchSize + 1)
 		}
 
 		// fill address for each batch
 		addrBatchs := make([]addrBatch, batchNum)
 		for i := range addrBatchs {
 			addrBatchs[i] = addrBatch{
-				addrs: make([]*net.IPAddr, 0, p.WriteBatch),
+				addrs: make([]*net.IPAddr, 0, p.sendOpts.BatchSize),
 			}
 		}
 		for i, addr := range p.addrs {
-			j := i / int(p.WriteBatch)
+			j := i / int(p.sendOpts.BatchSize)
 			batch := addrBatchs[j]
 			batch.addrs = append(batch.addrs, addr)
 			addrBatchs[j] = batch
 		}
 
 		// send extra 10 packets
-		for n := 0; n < int(p.Count+10); n++ {
+		for n := 0; n < int(p.count+10); n++ {
 			stime := time.Now()
 			for _, batch := range addrBatchs {
 				batch.seq = n
 				addrBatchChan <- batch
 			}
-			time.Sleep(p.Interval)
-			fmt.Fprintf(os.Stderr, "kping send: seq %d(%d) done, usedTime: %s\n", n, p.Count+10, time.Since(stime))
+			time.Sleep(p.interval)
+			fmt.Fprintf(os.Stderr, "kping send: seq %d(%d) done, usedTime: %s\n", n, p.count+10, time.Since(stime))
 		}
 
 		// sent done, sleep 1s
 		close(addrBatchChan)
-		fmt.Fprintf(os.Stderr, "kping send: all done, parallel: %d, ipCount: %d, usedTime: %s\n", p.WriteParallel, p.ipCount, time.Since(stime))
+		fmt.Fprintf(os.Stderr, "kping send: all done, ipCount: %d, usedTime: %s\n", p.ipCount, time.Since(stime))
 		time.Sleep(1 * time.Second)
 	}()
 

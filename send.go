@@ -13,7 +13,7 @@ import (
 func (p *kping) send(index int, addrBatchChan chan addrBatch) {
 	stime := time.Now()
 	// create ICMP Echo packet
-	t := make([]byte, p.Size)
+	t := make([]byte, p.size)
 	b := icmp.Echo{ID: icmpIDSeqInitNum + index, Data: t}
 	m := icmp.Message{
 		Type: ipv4.ICMPTypeEcho,
@@ -21,7 +21,7 @@ func (p *kping) send(index int, addrBatchChan chan addrBatch) {
 		Body: &b,
 	}
 	// message cache
-	wms := make([]message, 0, p.WriteBatch)
+	wms := make([]message, 0, p.sendOpts.BatchSize)
 L:
 	for {
 		var ab addrBatch
@@ -40,7 +40,7 @@ L:
 		b.Seq = icmpIDSeqInitNum + ab.seq
 		// fill icmp payload with current timestamp
 		nsec := time.Now().UnixNano()
-		for i := uint64(0); i < p.Size; i++ {
+		for i := uint64(0); i < uint64(p.size); i++ {
 			if i < timeSliceLength {
 				t[i] = byte((nsec >> ((7 - i) * timeSliceLength)) & 0xff)
 			} else {
@@ -63,17 +63,17 @@ L:
 			// blocking write mult message
 			num, err = p.rawConn.writeBatch(wms2, 0)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "kping send: %d(%d), seq: %d, writeBatch failed: %v\n", index, p.WriteParallel, ab.seq, err)
+				fmt.Fprintf(os.Stderr, "kping send: %d(%d), seq: %d, writeBatch failed: %v\n", index, p.sendOpts.Parallel, ab.seq, err)
 				continue
 			}
 			break
 		}
 		if num != len(wms2) {
-			fmt.Fprintf(os.Stderr, "kping send: %d(%d), seq: %d, writeBatch parted: %d(%d)\n", index, p.WriteParallel, ab.seq, len(wms2), num)
+			fmt.Fprintf(os.Stderr, "kping send: %d(%d), seq: %d, writeBatch parted: %d(%d)\n", index, p.sendOpts.Parallel, ab.seq, len(wms2), num)
 		}
 		durTime := time.Since(stime2)
 		if durTime > 50*time.Millisecond {
-			fmt.Fprintf(os.Stderr, "kping send: %d(%d), seq: %d, writeBatch %d(%d), usedTime: %s\n", index, p.WriteParallel, ab.seq, len(wms2), num, durTime)
+			fmt.Fprintf(os.Stderr, "kping send: %d(%d), seq: %d, writeBatch %d(%d), usedTime: %s\n", index, p.sendOpts.Parallel, ab.seq, len(wms2), num, durTime)
 		}
 		for _, msg := range wms2[0:num] {
 			addr := msg.Addr.String()
@@ -85,8 +85,8 @@ L:
 			}
 		}
 		// wait a little time
-		time.Sleep(p.WriteWaitTime)
+		time.Sleep(p.sendOpts.WaitTimeout)
 		p.sendLock.Unlock()
 	}
-	fmt.Fprintf(os.Stderr, "kping send: %d(%d) done, usedTime: %s\n", index, p.WriteParallel, time.Since(stime))
+	fmt.Fprintf(os.Stderr, "kping send: %d(%d) done, usedTime: %s\n", index, p.sendOpts.Parallel, time.Since(stime))
 }

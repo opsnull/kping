@@ -7,17 +7,17 @@ import (
 )
 
 // statistic ping result
-func (p *Pinger) statistic() (statistics map[string]*Statistic) {
+func (p *kping) statistic() (statistics map[string]*Statistic) {
 	statistics = make(map[string]*Statistic, p.ipCount)
 	// number of rtt value
 	rttStatistic := make(map[string]int, 15)
 	for addr, statistic := range p.stats {
 		// fix sent&recv number
-		if statistic.PacketsSent > p.Count {
-			statistic.PacketsSent = p.Count
+		if statistic.PacketsSent > p.count {
+			statistic.PacketsSent = p.count
 		}
-		if statistic.PacketsRecv > p.Count {
-			statistic.PacketsRecv = p.Count
+		if statistic.PacketsRecv > p.count {
+			statistic.PacketsRecv = p.count
 		}
 		statistic.PacketLost = float64(statistic.PacketsSent-statistic.PacketsRecv) / float64(statistic.PacketsSent) * 100
 		if len(statistic.RTTs) <= 0 {

@@ -11,7 +11,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/gopacket/afpacket"
 	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
 	"golang.org/x/net/bpf"
 	"golang.org/x/net/ipv4"
 )
@@ -26,9 +28,11 @@ const (
 func (p *kping) batchRecv(index int, wg *sync.WaitGroup) {
 	defer wg.Done()
 
+	recvBatch := p.batchRecvOpts.BatchSize
+	recvParallel := p.batchRecvOpts.Parallel
 	stime := time.Now()
-	rms := make([]message, 0, p.ReadBatch)
-	for i := 0; i < int(p.ReadBatch); i++ {
+	rms := make([]message, 0, recvBatch)
+	for i := 0; i < int(recvBatch); i++ {
 		msg := message{
 			Buffers: [][]byte{make([]byte, 100)},
 			N:       0,
@@ -46,7 +50,7 @@ L:
 		num, err := p.rawConn.readBatch(rms, index, 0) // blocking read
 		durTime := time.Since(stime2)
 		if durTime > 400*time.Millisecond {
-			fmt.Fprintf(os.Stderr, "kping recv: %d(%d) readBatch %d(%d), usedTime: %s\n", index, p.ReadParallel, p.ReadBatch, num, durTime)
+			fmt.Fprintf(os.Stderr, "kping recv: %d(%d) readBatch %d(%d), usedTime: %s\n", index, recvParallel, recvBatch, num, durTime)
 		}
 		if err != nil {
 			if err2, ok := err.(*os.SyscallError); ok {
@@ -54,18 +58,18 @@ L:
 					//time.Sleep(20 * time.Millisecond)
 				}
 			} else {
-				fmt.Fprintf(os.Stderr, "kping recv: %d(%d) readBatch failed: %v\n", index, p.ReadParallel, err)
+				fmt.Fprintf(os.Stderr, "kping recv: %d(%d) readBatch failed: %v\n", index, recvParallel, err)
 			}
 			continue
 		}
 		for _, msg := range rms[0:num] {
-			if len(bytes) < 16 {
-				fmt.Fprintf(os.Stderr, "kping recv: %d(%d) %s IMCP message length %d < 16 Bytes, ignored\n", index, p.ReadParallel, ip, len(bytes))
-				continue
-			}
 			ip := net.IPv4(msg.Buffers[0][12], msg.Buffers[0][13], msg.Buffers[0][14], msg.Buffers[0][15]).String()
 			hdrlen := int(msg.Buffers[0][0]&0x0f) << 2
 			bytes := msg.Buffers[0][hdrlen:msg.N]
+			if len(bytes) < 16 {
+				fmt.Fprintf(os.Stderr, "kping recv: %d(%d) %s IMCP message length %d < 16 Bytes, ignored\n", index, recvParallel, ip, len(bytes))
+				continue
+			}
 			/*
 				bytes[0]: type
 				bytes[1]: code
@@ -99,33 +103,34 @@ L:
 			}
 		}
 	}
-	fmt.Fprintf(os.Stderr, "kping recv: %d(%d) done, usedTime: %s\n", index, p.ReadParallel, time.Since(stime))
+	fmt.Fprintf(os.Stderr, "kping recv: %d(%d) done, usedTime: %s\n", index, recvParallel, time.Since(stime))
 }
 
 func (p *kping) afpacketRecv(index int, wg *sync.WaitGroup) {
 	defer wg.Done()
 
+	recvParallel := p.afpacketRecvOpts.Parallel
 	options := []interface{}{
 		afpacket.OptFrameSize(1 << 11), // not used for v3.
 		afpacket.OptBlockSize(1 << 20),
-		afpacket.OptNumBlocks(p.ReadBlockMB),
-		afpacket.OptPollTimeout(p.ReadTimeout),
-		afpacket.OptInterface(p.Iface),
+		afpacket.OptNumBlocks(p.afpacketRecvOpts.BlockMB),
+		afpacket.OptPollTimeout(p.afpacketRecvOpts.Timeout),
+		afpacket.OptInterface(p.afpacketRecvOpts.Iface),
 		afpacket.SocketRaw,
 		afpacket.TPacketVersion3,
 	}
 	tpacket, err := afpacket.NewTPacket(options...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "kping recv: %d(%d) %v\n", index, p.ReadParallel, err)
+		fmt.Fprintf(os.Stderr, "kping recv: %d(%d) %v\n", index, recvParallel, err)
 		return
 	}
 	defer tpacket.Close()
 
 	// bpf filter
-	filter := fmt.Sprintf("ip and dst %s and icmp[icmptype] = icmp-echoreply and icmp[4:2] >= %d and icmp[6:2] >= %d", p.SourceIP, icmpIDSeqInitNum, icmpIDSeqInitNum)
-	pcapBPF, err := pcap.CompileBPFFilter(layers.LinkTypeEthernet, p.afpacktRecvOpts.SnapLength, filter)
+	filter := fmt.Sprintf("ip and dst %s and icmp[icmptype] = icmp-echoreply and icmp[4:2] >= %d and icmp[6:2] >= %d", p.sourceIP, icmpIDSeqInitNum, icmpIDSeqInitNum)
+	pcapBPF, err := pcap.CompileBPFFilter(layers.LinkTypeEthernet, int(p.afpacketRecvOpts.SnapLength), filter)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "kping recv: %d(%d) %v\n", index, p.ReadParallel, err)
+		fmt.Fprintf(os.Stderr, "kping recv: %d(%d) %v\n", index, recvParallel, err)
 		return
 	}
 	bpfIns := []bpf.RawInstruction{}
@@ -139,7 +144,7 @@ func (p *kping) afpacketRecv(index int, wg *sync.WaitGroup) {
 		bpfIns = append(bpfIns, bpfIns2)
 	}
 	if tpacket.SetBPF(bpfIns); err != nil {
-		fmt.Fprintf(os.Stderr, "kping recv: %d(%d) %v\n", index, p.ReadParallel, err)
+		fmt.Fprintf(os.Stderr, "kping recv: %d(%d) %v\n", index, recvParallel, err)
 		return
 	}
 
@@ -158,13 +163,13 @@ L:
 		}
 		data, ci, err := tpacket.ZeroCopyReadPacketData()
 		if err == io.EOF {
-			fmt.Fprintf(os.Stderr, "kping recv: %d(%d) NextPacket: io.EOF, break for loop\n", index, p.ReadParallel)
+			fmt.Fprintf(os.Stderr, "kping recv: %d(%d) NextPacket: io.EOF, break for loop\n", index, recvParallel)
 			break
 		} else if err != nil {
 			if err == afpacket.ErrTimeout || err == afpacket.ErrPoll {
 				continue
 			} else {
-				fmt.Fprintf(os.Stderr, "kping recv: %d(%d) NextPacket: unknown error: %v, ignored\n", index, p.ReadParallel, err)
+				fmt.Fprintf(os.Stderr, "kping recv: %d(%d) NextPacket: unknown error: %v, ignored\n", index, recvParallel, err)
 				continue
 			}
 		}
@@ -178,7 +183,7 @@ L:
 			- Layer 4 (10 bytes) = Payload  10 byte(s)
 		*/
 		if ci.Length < 50 { // 50: Ethernet(14)+IPv4(20)+ICMPv4(8)+Payload(>=8)
-			fmt.Fprintf(os.Stderr, "kping recv: %d(%d) packet length %d < 50 Bytes, ignored: \n%s\n", index, p.ReadParallel, ci.Length, data)
+			fmt.Fprintf(os.Stderr, "kping recv: %d(%d) packet length %d < 50 Bytes, ignored: \n%s\n", index, recvParallel, ci.Length, data)
 			continue
 		}
 		ip := net.IPv4(data[26], data[27], data[28], data[29]).String()
@@ -206,12 +211,13 @@ L:
 		}
 		ipCount++
 	}
-	fmt.Fprintf(os.Stderr, "kping recv: %d(%d) done, ipCount: %d, usedTime: %s\n", index, p.ReadParallel, ipCount, time.Since(stime))
+	fmt.Fprintf(os.Stderr, "kping recv: %d(%d) done, ipCount: %d, usedTime: %s\n", index, recvParallel, ipCount, time.Since(stime))
 }
 
 func (p *kping) pfringRecv(index int, wg *sync.WaitGroup) {
 	defer wg.Done()
 
+	recvParallel := p.pfringRecvOpts.Parallel
 	stime := time.Now()
 L:
 	for {
@@ -220,7 +226,6 @@ L:
 			break L
 		default:
 		}
-		stime2 := time.Now()
 		packet, err := p.packetSource.NextPacket()
 		if err == io.EOF {
 			break
@@ -235,7 +240,7 @@ L:
 		}
 		ci := packet.Metadata().CaptureInfo
 		if ci.Length < 50 {
-			fmt.Fprintf(os.Stderr, "kping recv: %d(%d) packet length %d < 50 Bytes, ignored: \n", index, p.ReadParallel, metaData.Length)
+			fmt.Fprintf(os.Stderr, "kping recv: %d(%d) packet length %d < 50 Bytes, ignored: \n", index, recvParallel, ci.Length)
 			continue
 		}
 		ip4 := ip4Layer.(*layers.IPv4)
@@ -252,8 +257,8 @@ L:
 		seq := int(binary.BigEndian.Uint16(bytes[6:8]))
 		// calculate RTT
 		var nsec int64
-		for i := uint8(0); i < TimeSliceLength; i++ {
-			nsec += int64(bytes[8 : 8+TimeSliceLength][i]) << ((7 - i) * TimeSliceLength)
+		for i := uint8(0); i < timeSliceLength; i++ {
+			nsec += int64(bytes[8 : 8+timeSliceLength][i]) << ((7 - i) * timeSliceLength)
 		}
 		sendTime := time.Unix(nsec/1000000000, nsec%1000000000)
 		rtt := ci.Timestamp.Sub(sendTime)

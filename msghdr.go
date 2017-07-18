@@ -14,7 +14,7 @@ type msghdr struct {
 	Control    *byte
 	Controllen uint64
 	Flags      int32
-	Pad2  [4]byte
+	Pad2       [4]byte
 }
 
 func (h *msghdr) pack(vs []iovec, bs [][]byte, oob []byte, sa []byte) {
