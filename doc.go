@@ -1,4 +1,8 @@
-/*Package kping implements large scale & high performance ICMP ping.
+/*Package kping implements large scale & high performance ICMP flood ping.
+
+It can send up to 1024 ICMP packets in one system call (sendmmsg), and provides three packet receiving methods(batchRead, af_packet, pf_ring).
+
+You can customize and optimize the send & receive options based on your system.
 
 Example:
 
