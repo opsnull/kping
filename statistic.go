@@ -13,13 +13,13 @@ func (p *kping) statistic() (statistics map[string]*Statistic) {
 	rttStatistic := make(map[string]int, 15)
 	for addr, statistic := range p.stats {
 		// fix sent & recv number
-		if statistic.PacketsSent > p.count {
-			statistic.PacketsSent = p.count
+		if statistic.SentNum > p.count {
+			statistic.SentNum = p.count
 		}
-		if statistic.PacketsRecv > p.count {
-			statistic.PacketsRecv = p.count
+		if statistic.RecvNum > p.count {
+			statistic.RecvNum = p.count
 		}
-		statistic.PacketLost = float64(statistic.PacketsSent-statistic.PacketsRecv) / float64(statistic.PacketsSent) * 100
+		statistic.LostNum = float64(statistic.SentNum-statistic.RecvNum) / float64(statistic.SentNum) * 100
 		if len(statistic.RTTs) <= 0 {
 			rttStatistic["==0"]++
 		} else {
