@@ -170,6 +170,11 @@ type Pinger interface {
 }
 
 // NewPinger returns a new pinger
+//   sourceIP: ping source IP
+//   count: number of request packets to send to each IP
+//   size: ICMP payload size in bytes, must >= 8
+//   timeout: the time to wait for all ping done
+//   interval: the time between sending a ping packet to each IP
 func NewPinger(sourceIP string, count, size int64, timeout, interval time.Duration) (p Pinger, err error) {
 	p = &kping{
 		sourceIP:         sourceIP,
