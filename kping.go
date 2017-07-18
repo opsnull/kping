@@ -30,18 +30,18 @@ type Statistic struct {
 	MinRTT      float64   // minimum RTT of RTTs
 	MaxRTT      float64   // maxmum RTT of RTTs
 	AvgRTT      float64   // average RTT of RTTs
-	StdDevRTT   float64   // StdDev of RTTs
+	StdDevRTT   float64   // stddev of RTTs
 
 	ipEvents map[int]ipEvent // key: ICMP seq
 }
 
 // SendOptions batch send options
 type SendOptions struct {
-	BatchSize   int64         // batchWrite ICMP packet number, must < 1024
-	BufferSize  int64         // batchWrite buffer size
-	Parallel    int64         // write goroutine number
-	Timeout     time.Duration // write timeout
-	WaitTimeout time.Duration // batchWrite interval
+	BatchSize   int64         // batch send ICMP packet number, must < 1024
+	BufferSize  int64         // batch send buffer size
+	Parallel    int64         // send goroutine number
+	Timeout     time.Duration // send timeout
+	WaitTimeout time.Duration // batch send interval
 }
 
 // DefaultSendOptions default batch send options
@@ -55,10 +55,10 @@ var DefaultSendOptions = SendOptions{
 
 // AfPacketRecvOptions af_packet recv options
 type AfPacketRecvOptions struct {
-	Parallel int64         // read goroutine number
+	Parallel int64         // recv goroutine number
 	BlockMB  int64         // af_packet: total block size
-	Timeout  time.Duration // read timeout
-	Iface    string
+	Timeout  time.Duration // recv timeout
+	Iface    string        // recv interface name, eg: "eth0"
 }
 
 // DefaultAfPacketRecvOptions default af_packet recv options
@@ -71,10 +71,11 @@ var DefaultAfPacketRecvOptions = AfPacketRecvOptions{
 
 // BatchRecvOptions batch recv options
 type BatchRecvOptions struct {
-	BatchSize  int64         // batchRead ICMP packet number, must < 1024
-	BufferSize int64         // batchRead buffer size
-	Parallel   int64         // read goroutine number
-	Timeout    time.Duration // read timeout
+	BatchSize  int64         // batch recv ICMP packet number, must < 1024
+	BufferSize int64         // batch recv buffer size
+	Parallel   int64         // recv goroutine number
+	Timeout    time.Duration // recv timeout
+	SnapLength int64         // snap byte number
 }
 
 // DefaultBatchRecvOptions default batch recv options
@@ -83,13 +84,14 @@ var DefaultBatchRecvOptions = BatchRecvOptions{
 	BufferSize: 10 * 1024 * 1024,
 	Parallel:   10,
 	Timeout:    100 * time.Millisecond,
+	SnapLength: 128,
 }
 
 // PFRingRecvOptions pf_ring recv options
 type PFRingRecvOptions struct {
-	Iface      string
-	SnapLength int64
-	Parallel   int64
+	Iface      string // recv interface name, eg: "eth0"
+	SnapLength int64  // snap byte number
+	Parallel   int64  // recv goroutine number
 }
 
 // DefaultPFRingRecvOptions default pf_ring recv options
@@ -106,7 +108,7 @@ var DefaultRecvMode = "afpacket"
 type Pinger interface {
 	// SetRecvMode set recv mode, oneof: afpacket(default)|batch|pfring
 	SetRecvMode(recvMode string) error
-	// SetAfPacketRecvOptions set af_packet recv optiosn if recvMode is "afpacket" (default)
+	// SetAfPacketRecvOptions set af_packet recv options if recvMode is "afpacket" (default)
 	SetAfPacketRecvOptions(options AfPacketRecvOptions) error
 	// SetBatchRecvOptions set batch recv options if recvMode is "batch"
 	SetBatchRecvOptions(options BatchRecvOptions) error
@@ -241,7 +243,7 @@ func (p *kping) Run() (statistics map[string]*Statistic, err error) {
 			return nil, fmt.Errorf("setICMPFilter failed: %v", err)
 		}
 	} else if mode == "pfring" {
-		ring, err := pfring.NewRing(p.Iface, 120, 0)
+		ring, err := pfring.NewRing(p.Iface, p.pfringRecvOpts.SnapLength, 0)
 		if err != nil {
 			return nil, fmt.Errorf("pfring: NewRing failed: %v", err)
 		}
