@@ -10,7 +10,7 @@ import (
 )
 
 // send ICMP packet
-func (p *Pinger) send(index int, addrBatchChan chan addrBatch) {
+func (p *kping) send(index int, addrBatchChan chan addrBatch) {
 	stime := time.Now()
 	// create ICMP Echo packet
 	t := make([]byte, p.Size)
@@ -34,7 +34,7 @@ L:
 				break L // send done
 			}
 		}
-		// get lock,at most one sent goroutine working
+		// get lock, at most one sent goroutine working
 		p.sendLock.Lock()
 		stime2 := time.Now()
 		b.Seq = icmpIDSeqInitNum + ab.seq
