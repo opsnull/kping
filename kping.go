@@ -38,7 +38,7 @@ type Statistic struct {
 // DefaultRecvMode default recv mode
 var DefaultRecvMode = "afpacket"
 
-// Options repsent options
+// Options represent options
 type Options interface{}
 
 type sendOptions struct {
@@ -58,11 +58,11 @@ var defaultSendOptions = sendOptions{
 }
 
 // SendOptions batch send options
-// batchSize: batch send ICMP packet number, must <= 1024, default: 1024
-// bufferSize: batch send buffer size, default: 10MB
-// parallel: send goroutine number, default: 30
-// timeout: send timeout, default: 100s
-// waitTimeout: batch send interval, default: 20ms
+//   batchSize: batch send ICMP packet number, must <= 1024, default: 1024
+// 	 bufferSize: batch send buffer size, default: 10MB
+// 	 parallel: send goroutine number, default: 30
+// 	 timeout: send timeout, default: 100s
+// 	 waitTimeout: batch send interval, default: 20ms
 func SendOptions(batchSize, bufferSize, parallel int64, timeout, waitTimeout time.Duration) (options Options, err error) {
 	return sendOptions{
 		BatchSize:   batchSize,
@@ -88,10 +88,10 @@ var defaultBatchRecvOptions = batchRecvOptions{
 }
 
 // BatchRecvOptions batch recv options
-// batchSize: batch recv ICMP packet number, must <= 1024, default: 100
-// bufferSize: batch recv buffer size, default: 10MB
-// parallel: recv goroutine number, default: 10
-// timeout: recv timeout, default: 100ms
+//   batchSize: batch recv ICMP packet number, must <= 1024, default: 100
+//   bufferSize: batch recv buffer size, default: 10MB
+//   parallel: recv goroutine number, default: 10
+//   timeout: recv timeout, default: 100ms
 func BatchRecvOptions(batchSize, bufferSize, parallel int64, timeout time.Duration) (options Options, err error) {
 	return batchRecvOptions{
 		BatchSize:  batchSize,
@@ -118,11 +118,11 @@ var defaultAfPacketRecvOptions = afpacketRecvOptions{
 }
 
 // AfPacketRecvOptions af_packet recv options
-// parallel: recv goroutine number, default: 1
-// blockMB: af_packet: total block size, default: 128MB
-// timeout: af_packet: poll timeout, default: 100ms
-// iface:  recv interface name, default: eth0
-// snapLength: snap byte number, default: 128B
+//   parallel: recv goroutine number, default: 1
+//   blockMB: af_packet: total block size, default: 128MB
+//   timeout: af_packet: poll timeout, default: 100ms
+//   iface:  recv interface name, default: eth0
+//   snapLength: snap byte number, default: 128B
 func AfPacketRecvOptions(parallel, blockMB, snapLength int64, iface string, timeout time.Duration) (options Options, err error) {
 	return afpacketRecvOptions{
 		Parallel:   parallel,
@@ -146,9 +146,9 @@ var defaultPFRingRecvOptions = pfringRecvOptions{
 }
 
 // PFRingRecvOptions pf_ring recv options
-// parallel: recv goroutine number， default: 1
-// snapLength: snap byte number, default: 128B
-// iface: recv interface name, default: eth0
+//   parallel: recv goroutine number， default: 1
+//   snapLength: snap byte number, default: 128B
+//   iface: recv interface name, default: eth0
 func PFRingRecvOptions(parallel, snapLength int64, iface string) (options Options, err error) {
 	return pfringRecvOptions{
 		Iface:      iface,
@@ -178,7 +178,7 @@ func NewPinger(sourceIP string, count, size int64, timeout, interval time.Durati
 		timeout:          timeout,
 		interval:         interval,
 		recvMode:         DefaultRecvMode,
-		sendOpts:         DefaultSendOptions,
+		sendOpts:         defaultSendOptions,
 		afpacketRecvOpts: defaultAfPacketRecvOptions,
 		batchRecvOpts:    defaultBatchRecvOptions,
 		pfringRecvOpts:   defaultPFRingRecvOptions,
@@ -197,10 +197,10 @@ type kping struct {
 	interval time.Duration // ping interval
 	recvMode string
 
-	sendOpts         SendOptions
-	afpacketRecvOpts AfPacketRecvOptions
-	batchRecvOpts    BatchRecvOptions
-	pfringRecvOpts   PFRingRecvOptions
+	sendOpts         sendOptions
+	afpacketRecvOpts afpacketRecvOptions
+	batchRecvOpts    batchRecvOptions
+	pfringRecvOpts   pfringRecvOptions
 
 	rawConn      *rawConn
 	ring         *pfring.Ring
@@ -229,13 +229,13 @@ func (p *kping) SetRecvMode(mode string) (err error) {
 func (p *kping) SetOptions(options Options) (err error) {
 	switch opts := options.(type) {
 	case sendOptions:
-		p.sendOpts = options
+		p.sendOpts = opts
 	case batchRecvOptions:
-		p.batchRecvOpts = options
+		p.batchRecvOpts = opts
 	case afpacketRecvOptions:
-		p.afpacketRecvOpts = options
+		p.afpacketRecvOpts = opts
 	case pfringRecvOptions:
-		p.pfringRecvOpts = options
+		p.pfringRecvOpts = opts
 	}
 	return nil
 }

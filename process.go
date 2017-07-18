@@ -27,10 +27,10 @@ func (p *kping) process() {
 		}
 
 		if event.sendDuration != 0 {
-			p.stats[event.ip].PacketsSent++
+			p.stats[event.ip].SentNum++
 			event2.sendDuration = event.sendDuration
 		} else if event.recvRTT != 0 {
-			p.stats[event.ip].PacketsRecv++
+			p.stats[event.ip].RecvNum++
 			event2.recvRTT = event.recvRTT
 		}
 		p.stats[event.ip].ipEvents[event.seq] = event2
