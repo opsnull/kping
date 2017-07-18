@@ -21,7 +21,7 @@ type ipEvent struct {
 	recvRTT      time.Duration
 }
 
-// Statistic ping statistic of IP
+// A Statistic is a ping statistic of IP
 type Statistic struct {
 	RecvNum   int64     // recv packets number
 	SentNum   int64     // sent packets number
@@ -35,10 +35,10 @@ type Statistic struct {
 	ipEvents map[int]ipEvent // key: ICMP seq
 }
 
-// DefaultRecvMode default recv mode
+// DefaultRecvMode is the default recv mode
 var DefaultRecvMode = "afpacket"
 
-// Options represent options
+// Options representes send & recv options
 type Options interface{}
 
 type sendOptions struct {
@@ -57,12 +57,12 @@ var defaultSendOptions = sendOptions{
 	WaitTimeout: 20 * time.Millisecond,
 }
 
-// SendOptions batch send options
+// SendOptions creates batch send options
 //   batchSize: batch send ICMP packet number, must <= 1024, default: 1024
-// 	 bufferSize: batch send buffer size, default: 10MB
-// 	 parallel: send goroutine number, default: 30
-// 	 timeout: send timeout, default: 100s
-// 	 waitTimeout: batch send interval, default: 20ms
+//   bufferSize: batch send buffer size, default: 10MB
+//   parallel: send goroutine number, default: 30
+//   timeout: send timeout, default: 100s
+//   waitTimeout: batch send interval, default: 20ms
 func SendOptions(batchSize, bufferSize, parallel int64, timeout, waitTimeout time.Duration) (options Options, err error) {
 	return sendOptions{
 		BatchSize:   batchSize,
@@ -87,7 +87,7 @@ var defaultBatchRecvOptions = batchRecvOptions{
 	Timeout:    100 * time.Millisecond,
 }
 
-// BatchRecvOptions batch recv options
+// BatchRecvOptions creates batch recv options
 //   batchSize: batch recv ICMP packet number, must <= 1024, default: 100
 //   bufferSize: batch recv buffer size, default: 10MB
 //   parallel: recv goroutine number, default: 10
@@ -117,7 +117,7 @@ var defaultAfPacketRecvOptions = afpacketRecvOptions{
 	SnapLength: 128,
 }
 
-// AfPacketRecvOptions af_packet recv options
+// AfPacketRecvOptions creates af_packet recv options
 //   parallel: recv goroutine number, default: 1
 //   blockMB: af_packet: total block size, default: 128MB
 //   timeout: af_packet: poll timeout, default: 100ms
@@ -145,7 +145,7 @@ var defaultPFRingRecvOptions = pfringRecvOptions{
 	Parallel:   1,
 }
 
-// PFRingRecvOptions pf_ring recv options
+// PFRingRecvOptions creates pf_ring recv options
 //   parallel: recv goroutine number， default: 1
 //   snapLength: snap byte number, default: 128B
 //   iface: recv interface name, default: eth0
@@ -157,7 +157,7 @@ func PFRingRecvOptions(parallel, snapLength int64, iface string) (options Option
 	}, nil
 }
 
-// Pinger repsent kping methods
+// A Pinger provides various methods of kping
 type Pinger interface {
 	// SetRecvMode set recv mode, oneof: afpacket(default)|batch|pfring
 	SetRecvMode(recvMode string) error
@@ -169,7 +169,7 @@ type Pinger interface {
 	Run() (statistics map[string]*Statistic, err error)
 }
 
-// NewPinger return a new pinger
+// NewPinger returns a new pinger
 func NewPinger(sourceIP string, count, size int64, timeout, interval time.Duration) (p Pinger, err error) {
 	p = &kping{
 		sourceIP:         sourceIP,
