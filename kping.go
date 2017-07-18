@@ -53,7 +53,7 @@ var DefaultSendOptions = SendOptions{
 
 type AfPacketRecvOptions struct {
 	Parallel int64         // read goroutine number
-	BlockMB  int64         // af_packet: total block siz
+	BlockMB  int64         // af_packet: total block size
 	Timeout  time.Duration // read timeout
 	Iface    string
 }
