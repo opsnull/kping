@@ -37,7 +37,7 @@ type Statistic struct {
 
 // SendOptions batch send options
 type SendOptions struct {
-	BatchSize   int64         // batch send ICMP packet number, must < 1024
+	BatchSize   int64         // batch send ICMP packet number, must <= 1024
 	BufferSize  int64         // batch send buffer size
 	Parallel    int64         // send goroutine number
 	Timeout     time.Duration // send timeout
@@ -73,7 +73,7 @@ var DefaultAfPacketRecvOptions = AfPacketRecvOptions{
 
 // BatchRecvOptions batch recv options
 type BatchRecvOptions struct {
-	BatchSize  int64         // batch recv ICMP packet number, must < 1024
+	BatchSize  int64         // batch recv ICMP packet number, must <= 1024
 	BufferSize int64         // batch recv buffer size
 	Parallel   int64         // recv goroutine number
 	Timeout    time.Duration // recv timeout

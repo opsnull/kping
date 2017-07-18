@@ -31,6 +31,7 @@ type mmsghdr struct {
 
 type mmsghdrs []mmsghdr
 
+// 1500 > UIO_MAXIOV(linux default: 1024)
 var vsCache = make([][]iovec, 1500)
 var saCache = make([][]byte, 1500)
 

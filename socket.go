@@ -93,7 +93,7 @@ func newRawConn(sourceIP string, readBuffer, writeBuffer int64, readTimeout, wri
 	}
 
 	if err := rc.setTOS(0x0); err != nil {
-		return nil, fmt.Errorf("set TTL failed: %v", err)
+		return nil, fmt.Errorf("set TOS failed: %v", err)
 	}
 
 	if err := rc.setTTL(64); err != nil {
@@ -152,7 +152,7 @@ var hsCache = make([]mmsghdrs, 100) // ReadBatch parallel < 100
 
 func init() {
 	for i := 0; i < len(hsCache); i++ {
-		hsCache[i] = make(mmsghdrs, 1024)
+		hsCache[i] = make(mmsghdrs, 1024) // buffer size >= UIO_MAXIOV(linux default: 1024)
 	}
 }
 
