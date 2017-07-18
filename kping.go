@@ -21,20 +21,21 @@ type ipEvent struct {
 	recvRTT      time.Duration
 }
 
-// Statistic ping statistic of single ip
+// Statistic ping statistic of IP
 type Statistic struct {
-	PacketsRecv int64
-	PacketsSent int64
-	PacketLoss  float64
-	RTTs        []float64
-	MinRTT      float64
-	MaxRTT      float64
-	AvgRTT      float64
-	StdDevRTT   float64
+	PacketsRecv int64     // recv packets number
+	PacketsSent int64     // sent packets number
+	PacketLost  float64   // lost packets number
+	RTTs        []float64 // RTT of each recv packet
+	MinRTT      float64   // minimum RTT of RTTs
+	MaxRTT      float64   // maxmum RTT of RTTs
+	AvgRTT      float64   // average RTT of RTTs
+	StdDevRTT   float64   // StdDev of RTTs
 
 	ipEvents map[int]ipEvent // key: ICMP seq
 }
 
+// SendOptions batch send options
 type SendOptions struct {
 	BatchSize   int64         // batchWrite ICMP packet number, must < 1024
 	BufferSize  int64         // batchWrite buffer size
@@ -43,6 +44,7 @@ type SendOptions struct {
 	WaitTimeout time.Duration // batchWrite interval
 }
 
+// DefaultSendOptions default batch send options
 var DefaultSendOptions = SendOptions{
 	BatchSize:   1024,
 	BufferSize:  10 * 1024 * 1024,
@@ -51,6 +53,7 @@ var DefaultSendOptions = SendOptions{
 	WaitTimeout: 20 * time.Millisecond,
 }
 
+// AfPacketRecvOptions af_packet recv options
 type AfPacketRecvOptions struct {
 	Parallel int64         // read goroutine number
 	BlockMB  int64         // af_packet: total block size
@@ -58,6 +61,7 @@ type AfPacketRecvOptions struct {
 	Iface    string
 }
 
+// DefaultAfPacketRecvOptions default af_packet recv options
 var DefaultAfPacketRecvOptions = AfPacketRecvOptions{
 	Parallel: 1,
 	BlockMB:  128,
@@ -65,6 +69,7 @@ var DefaultAfPacketRecvOptions = AfPacketRecvOptions{
 	Iface:    "eth0",
 }
 
+// BatchRecvOptions batch recv options
 type BatchRecvOptions struct {
 	BatchSize  int64         // batchRead ICMP packet number, must < 1024
 	BufferSize int64         // batchRead buffer size
@@ -72,6 +77,7 @@ type BatchRecvOptions struct {
 	Timeout    time.Duration // read timeout
 }
 
+// DefaultBatchRecvOptions default batch recv options
 var DefaultBatchRecvOptions = BatchRecvOptions{
 	BatchSize:  100,
 	BufferSize: 10 * 1024 * 1024,
@@ -79,28 +85,38 @@ var DefaultBatchRecvOptions = BatchRecvOptions{
 	Timeout:    100 * time.Millisecond,
 }
 
+// PFRingRecvOptions pf_ring recv options
 type PFRingRecvOptions struct {
 	Iface      string
 	SnapLength int64
 	Parallel   int64
 }
 
+// DefaultPFRingRecvOptions default pf_ring recv options
 var DefaultPFRingRecvOptions = PFRingRecvOptions{
 	Iface:      "eth0",
 	SnapLength: 128,
 	Parallel:   1,
 }
 
+// DefaultRecvMode default recv mode
 var DefaultRecvMode = "afpacket"
 
-// Pinger repsent ping
+// Pinger repsent kping methods
 type Pinger interface {
+	// SetRecvMode set recv mode, oneof: afpacket(default)|batch|pfring
 	SetRecvMode(recvMode string) error
+	// SetAfPacketRecvOptions set af_packet recv optiosn if recvMode is "afpacket" (default)
 	SetAfPacketRecvOptions(options AfPacketRecvOptions) error
+	// SetBatchRecvOptions set batch recv options if recvMode is "batch"
 	SetBatchRecvOptions(options BatchRecvOptions) error
+	// SetPFRingRecvOptions set pf_ring recv options if recvMode is "pfring"
 	SetPFRingRecvOptions(options PFRingRecvOptions) error
+	// SetSendOptions set send options
 	SetSendOptions(options SendOptions) error
+	// AddIPs add IP addrs to pinger
 	AddIPs(addrs []string) error
+	// Run flood ping, then calculate statistic of each IP
 	Run() (statistics map[string]*Statistic, err error)
 }
 
@@ -181,7 +197,6 @@ func (p *kping) SetSendOptions(options SendOptions) error {
 	return nil
 }
 
-// AddIPs add ip addresses to pinger
 func (p *kping) AddIPs(ipaddrs []string) error {
 	p.addrs = make([]*net.IPAddr, 0, len(ipaddrs))
 	p.Stats = make(map[string]*Statistic, len(ipaddrs))
@@ -201,7 +216,6 @@ type addrBatch struct {
 	addrs []*net.IPAddr
 }
 
-// Run flood ping, then calculate statistic per IP
 func (p *kping) Run() (statistics map[string]*Statistic, err error) {
 	// used by send & recv, so buffer size is double
 	p.ipEventChan = make(chan *ipEvent, p.ipCount*p.Count*2)
@@ -321,7 +335,7 @@ func (p *kping) Run() (statistics map[string]*Statistic, err error) {
 			addrBatchs[j] = batch
 		}
 
-		// 多发送 10 个包
+		// send extra 10 packets
 		for n := 0; n < int(p.Count+10); n++ {
 			stime := time.Now()
 			for _, batch := range addrBatchs {

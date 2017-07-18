@@ -9,7 +9,7 @@ Example:
 	if err := pinger.SetRecvMode("afpacket"); err != nil{
 		logger.Fatalln(err)
 	}
-	recvOpts := AfpacketRecvOptions{
+	recvOpts := AfPacketRecvOptions{
 		Parallel: 2,
 		BlockMB:  256,
 		Timeout:  100 * time.Millisecond,

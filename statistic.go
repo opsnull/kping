@@ -19,7 +19,7 @@ func (p *Pinger) statistic() (statistics map[string]*Statistic) {
 		if statistic.PacketsRecv > p.Count {
 			statistic.PacketsRecv = p.Count
 		}
-		statistic.PacketLoss = float64(statistic.PacketsSent-statistic.PacketsRecv) / float64(statistic.PacketsSent) * 100
+		statistic.PacketLost = float64(statistic.PacketsSent-statistic.PacketsRecv) / float64(statistic.PacketsSent) * 100
 		if len(statistic.RTTs) <= 0 {
 			rttStatistic["==0"]++
 		} else {
