@@ -57,7 +57,7 @@ var DefaultSendOptions = SendOptions{
 type AfPacketRecvOptions struct {
 	Parallel   int64         // recv goroutine number
 	BlockMB    int64         // af_packet: total block size
-	Timeout    time.Duration // recv timeout
+	Timeout    time.Duration // af_packet: poll timeout
 	Iface      string        // recv interface name, eg: "eth0"
 	SnapLength int64         // snap byte number
 }
@@ -174,7 +174,7 @@ func (p *kping) SetRecvMode(mode string) (err error) {
 	case "afpacket", "pfring", "batch":
 		p.recvMode = mode
 	default:
-		return fmt.Errorf("unkown recv mode: %s, supported: afpacket pfring batch")
+		return fmt.Errorf("unknown recv mode: %s, should be oneof: afpacket|pfring|batch", p.recvMode)
 	}
 	return nil
 }

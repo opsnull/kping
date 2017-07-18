@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// process icmp packets
+// process ICMP packets
 func (p *kping) process() {
 	stime := time.Now()
 	for event := range p.ipEventChan {

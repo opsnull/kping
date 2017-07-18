@@ -9,7 +9,7 @@ import (
 	"golang.org/x/net/ipv4"
 )
 
-// send ICMP packet
+// batch send ICMP packets
 func (p *kping) send(index int, addrBatchChan chan addrBatch) {
 	stime := time.Now()
 	// create ICMP Echo packet
@@ -60,7 +60,7 @@ L:
 		var num int
 		var err error
 		for {
-			// blocking write mult message
+			// blocking write multi messages
 			num, err = p.rawConn.writeBatch(wms2, 0)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "kping send: %d(%d), seq: %d, writeBatch failed: %v\n", index, p.sendOpts.Parallel, ab.seq, err)

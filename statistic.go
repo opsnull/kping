@@ -12,7 +12,7 @@ func (p *kping) statistic() (statistics map[string]*Statistic) {
 	// number of rtt value
 	rttStatistic := make(map[string]int, 15)
 	for addr, statistic := range p.stats {
-		// fix sent&recv number
+		// fix sent & recv number
 		if statistic.PacketsSent > p.count {
 			statistic.PacketsSent = p.count
 		}
