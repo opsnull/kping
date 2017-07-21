@@ -150,7 +150,7 @@ func (p *kping) afpacketRecv(index int, wg *sync.WaitGroup) {
 
 	// LoadBalance Fanout
 	runtime.LockOSThread()
-	tpacket.SetFanout(afpacket.FanoutLoadBalance, 123)
+	tpacket.SetFanout(afpacket.FanoutLoadBalance, uint16(os.Getpid()))
 
 	ipCount := 0
 	stime := time.Now()
@@ -212,61 +212,4 @@ L:
 		ipCount++
 	}
 	fmt.Fprintf(os.Stderr, "kping recv: %d(%d) done, ipCount: %d, usedTime: %s\n", index, recvParallel, ipCount, time.Since(stime))
-}
-
-func (p *kping) pfringRecv(index int, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	recvParallel := p.pfringRecvOpts.Parallel
-	stime := time.Now()
-L:
-	for {
-		select {
-		case <-p.sendDone:
-			break L
-		default:
-		}
-		packet, err := p.packetSource.NextPacket()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			fmt.Fprintf(os.Stderr, "kping recv: NextPacket: unknown error: %v, ignored\n", err)
-			continue
-		}
-		ip4Layer := packet.Layer(layers.LayerTypeIPv4)
-		if ip4Layer == nil {
-			fmt.Fprintf(os.Stderr, "kping recv: not ipv4 packet, ignored\n")
-			continue
-		}
-		ci := packet.Metadata().CaptureInfo
-		if ci.Length < 50 {
-			fmt.Fprintf(os.Stderr, "kping recv: %d(%d) packet length %d < 50 Bytes, ignored: \n", index, recvParallel, ci.Length)
-			continue
-		}
-		ip4 := ip4Layer.(*layers.IPv4)
-		ip := ip4.SrcIP.String()
-		bytes := ip4.Payload
-		/*
-			bytes[0]: type
-			bytes[1]: code
-			bytes[2:4]: checkSum
-			bytes[4:6]: id
-			bytes[6:8]: seq
-			bytes[8:16]: payload: timestamp
-		*/
-		seq := int(binary.BigEndian.Uint16(bytes[6:8]))
-		// calculate RTT
-		var nsec int64
-		for i := uint8(0); i < timeSliceLength; i++ {
-			nsec += int64(bytes[8 : 8+timeSliceLength][i]) << ((7 - i) * timeSliceLength)
-		}
-		sendTime := time.Unix(nsec/1000000000, nsec%1000000000)
-		rtt := ci.Timestamp.Sub(sendTime)
-		p.ipEventChan <- &ipEvent{
-			ip:      ip,
-			seq:     seq,
-			recvRTT: rtt,
-		}
-	}
-	fmt.Fprintf(os.Stderr, "kping recv: %d done, usedTime: %s\n", index, time.Since(stime))
 }

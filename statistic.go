@@ -33,13 +33,22 @@ func (p *kping) statistic() (statistics map[string]*Statistic) {
 			if len(statistic.RTTs) >= 80 && len(statistic.RTTs) < 90 {
 				rttStatistic[">=80"]++
 			}
-			if len(statistic.RTTs) >= 60 && len(statistic.RTTs) < 80 {
+			if len(statistic.RTTs) >= 70 && len(statistic.RTTs) < 80 {
+				rttStatistic[">=70"]++
+			}
+			if len(statistic.RTTs) >= 60 && len(statistic.RTTs) < 70 {
 				rttStatistic[">=60"]++
 			}
-			if len(statistic.RTTs) >= 40 && len(statistic.RTTs) < 60 {
+			if len(statistic.RTTs) >= 50 && len(statistic.RTTs) < 60 {
+				rttStatistic[">=50"]++
+			}
+			if len(statistic.RTTs) >= 40 && len(statistic.RTTs) < 50 {
 				rttStatistic[">=40"]++
 			}
-			if len(statistic.RTTs) >= 20 && len(statistic.RTTs) < 40 {
+			if len(statistic.RTTs) >= 30 && len(statistic.RTTs) < 40 {
+				rttStatistic[">=30"]++
+			}
+			if len(statistic.RTTs) >= 20 && len(statistic.RTTs) < 30 {
 				rttStatistic[">=20"]++
 			}
 			// first: calculate avg value

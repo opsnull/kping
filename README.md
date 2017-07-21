@@ -2,7 +2,7 @@
 
 Package kping implements large scale & high performance ICMP flood ping.
 
-It can send up to 1024 ICMP packets in one system call (sendmmsg), and provides three methods for receiving packets quickly: batch, afpacket, pfring.
+It can send up to 1024 ICMP packets in one system call (sendmmsg), and provides two methods for receiving packets quickly: batch, afpacket.
 
 See API document on [godoc](https://godoc.org/github.com/opsnull/kping)
 

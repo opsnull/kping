@@ -8,9 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pfring"
 	"golang.org/x/net/ipv4"
 )
 
@@ -102,19 +99,17 @@ func BatchRecvOptions(batchSize, bufferSize, parallel int64, timeout time.Durati
 }
 
 type afpacketRecvOptions struct {
-	Parallel   int64
-	BlockMB    int64
-	Timeout    time.Duration
-	Iface      string
-	SnapLength int64
+	Parallel int64
+	BlockMB  int64
+	Timeout  time.Duration
+	Iface    string
 }
 
 var defaultAfPacketRecvOptions = afpacketRecvOptions{
-	Parallel:   1,
-	BlockMB:    128,
-	Timeout:    100 * time.Millisecond,
-	Iface:      "eth0",
-	SnapLength: 128,
+	Parallel: 1,
+	BlockMB:  128,
+	Timeout:  100 * time.Millisecond,
+	Iface:    "eth0",
 }
 
 // AfPacketRecvOptions creates af_packet recv options
@@ -122,38 +117,12 @@ var defaultAfPacketRecvOptions = afpacketRecvOptions{
 //   blockMB: af_packet: total block size, default: 128MB
 //   timeout: af_packet: poll timeout, default: 100ms
 //   iface:  recv interface name, default: eth0
-//   snapLength: snap byte number, default: 128B
-func AfPacketRecvOptions(parallel, blockMB, snapLength int64, iface string, timeout time.Duration) (options Options, err error) {
+func AfPacketRecvOptions(parallel, blockMB, iface string, timeout time.Duration) (options Options, err error) {
 	return afpacketRecvOptions{
-		Parallel:   parallel,
-		BlockMB:    blockMB,
-		Timeout:    timeout,
-		Iface:      iface,
-		SnapLength: snapLength,
-	}, nil
-}
-
-type pfringRecvOptions struct {
-	Iface      string
-	SnapLength int64
-	Parallel   int64
-}
-
-var defaultPFRingRecvOptions = pfringRecvOptions{
-	Iface:      "eth0",
-	SnapLength: 128,
-	Parallel:   1,
-}
-
-// PFRingRecvOptions creates pf_ring recv options
-//   parallel: recv goroutine number， default: 1
-//   snapLength: snap byte number, default: 128B
-//   iface: recv interface name, default: eth0
-func PFRingRecvOptions(parallel, snapLength int64, iface string) (options Options, err error) {
-	return pfringRecvOptions{
-		Iface:      iface,
-		SnapLength: snapLength,
-		Parallel:   parallel,
+		Parallel: parallel,
+		BlockMB:  blockMB,
+		Timeout:  timeout,
+		Iface:    iface,
 	}, nil
 }
 
@@ -186,7 +155,6 @@ func NewPinger(sourceIP string, count, size int64, timeout, interval time.Durati
 		sendOpts:         defaultSendOptions,
 		afpacketRecvOpts: defaultAfPacketRecvOptions,
 		batchRecvOpts:    defaultBatchRecvOptions,
-		pfringRecvOpts:   defaultPFRingRecvOptions,
 		recvReady:        make(chan bool),
 		sendDone:         make(chan bool),
 		sendLock:         new(sync.Mutex),
@@ -207,23 +175,21 @@ type kping struct {
 	batchRecvOpts    batchRecvOptions
 	pfringRecvOpts   pfringRecvOptions
 
-	rawConn      *rawConn
-	ring         *pfring.Ring
-	packetSource *gopacket.PacketSource
-	stats        map[string]*Statistic // key: ip
-	addrs        []*net.IPAddr
-	ipCount      int64
-	context      context.Context
-	cancel       context.CancelFunc
-	recvReady    chan bool
-	sendDone     chan bool
-	sendLock     *sync.Mutex
-	ipEventChan  chan *ipEvent
+	rawConn     *rawConn
+	stats       map[string]*Statistic // key: ip
+	addrs       []*net.IPAddr
+	ipCount     int64
+	context     context.Context
+	cancel      context.CancelFunc
+	recvReady   chan bool
+	sendDone    chan bool
+	sendLock    *sync.Mutex
+	ipEventChan chan *ipEvent
 }
 
 func (p *kping) SetRecvMode(mode string) (err error) {
 	switch mode {
-	case "afpacket", "pfring", "batch":
+	case "afpacket", "batch":
 		p.recvMode = mode
 	default:
 		return fmt.Errorf("unknown recv mode: %s, should be oneof: afpacket|pfring|batch", p.recvMode)
@@ -239,8 +205,6 @@ func (p *kping) SetOptions(options Options) (err error) {
 		p.batchRecvOpts = opts
 	case afpacketRecvOptions:
 		p.afpacketRecvOpts = opts
-	case pfringRecvOptions:
-		p.pfringRecvOpts = opts
 	}
 	return nil
 }
@@ -288,30 +252,6 @@ func (p *kping) Run() (statistics map[string]*Statistic, err error) {
 		if err := rawConn.setICMPFilter(&filter); err != nil {
 			return nil, fmt.Errorf("setICMPFilter failed: %v", err)
 		}
-	} else if p.recvMode == "pfring" {
-		ring, err := pfring.NewRing(p.pfringRecvOpts.Iface, uint32(p.pfringRecvOpts.SnapLength), 0)
-		if err != nil {
-			return nil, fmt.Errorf("pfring: NewRing failed: %v", err)
-		}
-		filter := fmt.Sprintf("ip and dst %s and icmp[icmptype] = icmp-echoreply and icmp[4:2] > %d and icmp[6:2] > %d", p.sourceIP, icmpIDSeqInitNum, icmpIDSeqInitNum)
-		if err := ring.SetBPFFilter(filter); err != nil {
-			return nil, fmt.Errorf("pfring: set bpf filter failed: %v, filter: %s", err, filter)
-		}
-		if err := ring.SetSocketMode(pfring.ReadOnly); err != nil {
-			return nil, fmt.Errorf("pfring: set socket mode failed: %v", err)
-		}
-		if err := ring.SetDirection(pfring.ReceiveOnly); err != nil {
-			return nil, fmt.Errorf("pfring: set direction failed: %v", err)
-		}
-		if err := ring.Enable(); err != nil {
-			return nil, fmt.Errorf("pfring: enable failed: %v", err)
-		}
-		p.ring = ring
-		defer p.ring.Close()
-
-		packetSource := gopacket.NewPacketSource(p.ring, layers.LinkTypeEthernet)
-		packetSource.NoCopy = true
-		p.packetSource = packetSource
 	}
 
 	// receive packets
@@ -328,9 +268,6 @@ func (p *kping) Run() (statistics map[string]*Statistic, err error) {
 		case "afpacket":
 			recvParallel = p.afpacketRecvOpts.Parallel
 			recvFunc = p.afpacketRecv
-		case "pfring":
-			recvParallel = p.pfringRecvOpts.Parallel
-			recvFunc = p.pfringRecv
 		case "batch":
 			recvParallel = p.batchRecvOpts.Parallel
 			recvFunc = p.batchRecv
