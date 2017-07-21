@@ -41,7 +41,7 @@ You can customize and optimize the send & receive options based on your system:
 		logger.Fatalln(err)
 	}
 
-	// Set Recv mode: afpacket | pfring | batch
+	// Set Recv mode: afpacket | batch
 	if err := pinger.SetRecvMode("afpacket"); err != nil{
 		logger.Fatalln(err)
 	}

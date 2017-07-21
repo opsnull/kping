@@ -52,7 +52,7 @@ if sendOpts, err := SendOptions(1024, 10*1024*1024, 30, 100*time.Second, 20*time
     logger.Fatalln(err)
 }
 
-// Set Recv mode: afpacket | pfring | batch
+// Set Recv mode: afpacket | batch
 if err := pinger.SetRecvMode("afpacket"); err != nil{
     logger.Fatalln(err)
 }

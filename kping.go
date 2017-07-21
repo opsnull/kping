@@ -117,7 +117,7 @@ var defaultAfPacketRecvOptions = afpacketRecvOptions{
 //   blockMB: af_packet: total block size, default: 128MB
 //   timeout: af_packet: poll timeout, default: 100ms
 //   iface:  recv interface name, default: eth0
-func AfPacketRecvOptions(parallel, blockMB, iface string, timeout time.Duration) (options Options, err error) {
+func AfPacketRecvOptions(parallel, blockMB int64, iface string, timeout time.Duration) (options Options, err error) {
 	return afpacketRecvOptions{
 		Parallel: parallel,
 		BlockMB:  blockMB,
@@ -128,7 +128,7 @@ func AfPacketRecvOptions(parallel, blockMB, iface string, timeout time.Duration)
 
 // A Pinger provides various methods of kping
 type Pinger interface {
-	// SetRecvMode set recv mode, oneof: afpacket(default)|batch|pfring
+	// SetRecvMode set recv mode, oneof: afpacket(default)|batch
 	SetRecvMode(recvMode string) error
 	// SetOptions set send or recv options
 	SetOptions(options Options) error
@@ -173,7 +173,6 @@ type kping struct {
 	sendOpts         sendOptions
 	afpacketRecvOpts afpacketRecvOptions
 	batchRecvOpts    batchRecvOptions
-	pfringRecvOpts   pfringRecvOptions
 
 	rawConn     *rawConn
 	stats       map[string]*Statistic // key: ip
@@ -192,7 +191,7 @@ func (p *kping) SetRecvMode(mode string) (err error) {
 	case "afpacket", "batch":
 		p.recvMode = mode
 	default:
-		return fmt.Errorf("unknown recv mode: %s, should be oneof: afpacket|pfring|batch", p.recvMode)
+		return fmt.Errorf("unknown recv mode: %s, should be oneof: afpacket|batch", p.recvMode)
 	}
 	return nil
 }

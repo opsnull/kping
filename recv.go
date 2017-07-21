@@ -128,7 +128,7 @@ func (p *kping) afpacketRecv(index int, wg *sync.WaitGroup) {
 
 	// bpf filter
 	filter := fmt.Sprintf("ip and dst %s and icmp[icmptype] = icmp-echoreply and icmp[4:2] >= %d and icmp[6:2] >= %d", p.sourceIP, icmpIDSeqInitNum, icmpIDSeqInitNum)
-	pcapBPF, err := pcap.CompileBPFFilter(layers.LinkTypeEthernet, int(p.afpacketRecvOpts.SnapLength), filter)
+	pcapBPF, err := pcap.CompileBPFFilter(layers.LinkTypeEthernet, int(p.size+60), filter)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "kping recv: %d(%d) %v\n", index, recvParallel, err)
 		return
