@@ -45,6 +45,5 @@ func (p *kping) process() {
 			p.stats[event.ip].RTTs = rtts
 		}
 	}
-
 	fmt.Fprintf(os.Stderr, "kping process: done, ipCount: %d, usedTime: %s\n", len(p.stats), time.Since(stime))
 }

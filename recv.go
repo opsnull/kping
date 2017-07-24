@@ -114,14 +114,14 @@ func (p *kping) afpacketRecv(index int, wg *sync.WaitGroup) {
 		afpacket.OptFrameSize(1 << 11), // not used for v3.
 		afpacket.OptBlockSize(1 << 20),
 		afpacket.OptNumBlocks(p.afpacketRecvOpts.BlockMB),
-		afpacket.OptPollTimeout(p.afpacketRecvOpts.Timeout),
+		afpacket.OptPollTimeout(p.afpacketRecvOpts.PollTimeout),
 		afpacket.OptInterface(p.afpacketRecvOpts.Iface),
 		afpacket.SocketRaw,
 		afpacket.TPacketVersion3,
 	}
 	tpacket, err := afpacket.NewTPacket(options...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "kping recv: %d(%d) %v\n", index, recvParallel, err)
+		fmt.Fprintf(os.Stderr, "kping recv: %d(%d) NewTPacket failed: %v\n", index, recvParallel, err)
 		return
 	}
 	defer tpacket.Close()
@@ -130,7 +130,7 @@ func (p *kping) afpacketRecv(index int, wg *sync.WaitGroup) {
 	filter := fmt.Sprintf("ip and dst %s and icmp[icmptype] = icmp-echoreply and icmp[4:2] >= %d and icmp[6:2] >= %d", p.sourceIP, icmpIDSeqInitNum, icmpIDSeqInitNum)
 	pcapBPF, err := pcap.CompileBPFFilter(layers.LinkTypeEthernet, int(p.size+60), filter)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "kping recv: %d(%d) %v\n", index, recvParallel, err)
+		fmt.Fprintf(os.Stderr, "kping recv: %d(%d) CompileBPFFilter failed: %v\n", index, recvParallel, err)
 		return
 	}
 	bpfIns := []bpf.RawInstruction{}
@@ -144,7 +144,7 @@ func (p *kping) afpacketRecv(index int, wg *sync.WaitGroup) {
 		bpfIns = append(bpfIns, bpfIns2)
 	}
 	if tpacket.SetBPF(bpfIns); err != nil {
-		fmt.Fprintf(os.Stderr, "kping recv: %d(%d) %v\n", index, recvParallel, err)
+		fmt.Fprintf(os.Stderr, "kping recv: %d(%d) SetBPF failed: %v\n", index, recvParallel, err)
 		return
 	}
 
@@ -167,11 +167,11 @@ L:
 			break
 		} else if err != nil {
 			if err == afpacket.ErrTimeout || err == afpacket.ErrPoll {
-				continue
+				// os.Sleep(100*time.Millisecond)
 			} else {
 				fmt.Fprintf(os.Stderr, "kping recv: %d(%d) NextPacket: unknown error: %v, ignored\n", index, recvParallel, err)
-				continue
 			}
+			continue
 		}
 		/*
 			fmt.Fprintf(os.Stderr, "%s\n", data)
