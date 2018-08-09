@@ -58,9 +58,9 @@ if err := pinger.SetRecvMode("afpacket"); err != nil{
 }
 
 // Set afpacket recv mode options
-if recvOpts, err := AfPacketRecvOptions(2, 256, 128, "eth1", 100*time.Millsecond); err != nil{
+if recvOpts, err := AfPacketRecvOptions(2, 128, "eth1", 100*time.Millsecond); err != nil{
     logger.Fatalln(err)
-} else if err := pinger.SetOptions(recvOpts) {
+} else if err := pinger.SetOptions(recvOpts); err != nil {
     logger.Fatalln(err)
 }
 
